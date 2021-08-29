@@ -13,8 +13,8 @@ $(function(){
     // canvas related variables
     var canvas=document.getElementById("canvas");
     var ctx=canvas.getContext("2d");
-    var cw=canvas.width;
-    var ch=canvas.height;
+    var cw=1;
+    var ch=1;
 
     // checkbox to show/hide the original image
     var $showImage=$("#showImage");
@@ -23,7 +23,6 @@ $(function(){
     // checkbox to show/hide the path outline
     var $showOutline=$("#showOutline");
     $showOutline.prop('checked', true);
-
     // an array of points that defines the outline path
     var points;
 
@@ -39,10 +38,58 @@ $(function(){
         return(a>20);
     }
 
+    function check(grid, x, y, w, h)
+    {
+        if (!grid(x, y)) return false;
+        if (x + 1 >= w || !grid(x + 1, y)) return true;
+        if (x - 1 < 0 || !grid(x - 1, y)) return true;
+        if (y + 1 >= h || !grid(x, y + 1)) return true;
+        if (y - 1 < 0 || !grid(x, y - 1)) return true;
+        return false;
+    }
+
+    function findEdgePoint(grid, x, y, w, h)
+    {
+        // the contour algorithm must start with an edge point
+        let dx = 1;
+        let dy = 1;
+        if (check(grid, x, y, w, h)) return [x, y];
+        let sx = x;
+        while (sx > 0) 
+        {
+            sx--; 
+            if (check(grid, sx, y, w, h)) return [sx, y];
+        }
+        sx = x;
+        while (sx < w - 1) 
+        {
+            sx++; 
+            if (check(grid, sx, y, w, h)) return [sx, y];
+        }
+        let sy = y;
+        while (sy > 0) 
+        {
+            sy--; 
+            if (check(grid, x, sy, w, h)) return [x, sy];
+        }
+        sy = y;
+        while (sy < h - 1) 
+        {
+            sy++; 
+            if (check(grid, x, sy, w, h)) return [x, sy];
+        }
+    }
+
     // load the image
     var img=new Image();
     img.crossOrigin="anonymous";
     img.onload=function(){
+
+        canvas.width = img.width;
+        canvas.height = img.height;
+
+        cw=canvas.width;
+        ch=canvas.height;
 
         // draw the image
         // (this time to grab the image's pixel data
@@ -55,8 +102,12 @@ $(function(){
         // call the marching ants algorithm
         // to get the outline path of the image
         // (outline=outside path of transparent pixels
-        points=geom.contour(defineNonTransparent);
 
+        let st = findEdgePoint(defineNonTransparent, 80, 60, cw, ch);
+        points=geom.contour(defineNonTransparent, st);
+
+        console.log('points.length === ' + points.length);
+        
         ctx.strokeStyle="red";
         ctx.lineWidth=2;
 
@@ -67,7 +118,8 @@ $(function(){
         redraw();
 
     }
-    img.src="img/freepik/dog.svg";
+    //img.src="img/freepik/dog.svg";
+    img.src="img/test_shape.png";
 
     // redraw the canvas
     // user determines if original-image or outline path or both are visible
@@ -81,14 +133,18 @@ $(function(){
             ctx.drawImage(img,canvas.width/2-img.width/2,canvas.height/2-img.height/2);
         }
 
+        if (points.length < 2)
+        {
+            throw new Error('no poligon found.');
+        }
         // draw the path (consisting of connected points)
         if($showOutline.is(':checked')){
             // draw outline path
             ctx.beginPath();
-            ctx.moveTo(points[0][0],points[0][4]);
+            ctx.moveTo(points[0][0],points[0][1]);
             for(var i=1;i<points.length;i++){
-                var point=points[i];
-                ctx.lineTo(point[0],point[1]);
+                var p=points[i];
+                ctx.lineTo(p[0], p[1]);
             }
             ctx.closePath();
             ctx.stroke();
@@ -129,9 +185,18 @@ $(function(){
           dy = 0,    // next y direction 
           pdx = NaN, // previous x direction 
           pdy = NaN, // previous y direction 
-          i = 0; 
+          i = 0;
 
+          if (!grid(x, y))
+          {
+              console.log('start point not valid.');
+              return [];
+          }
+      let count = 0;
+      let maxCount = 100000;
       do { 
+        count++;
+        if (count > maxCount) return;
         // determine marching squares index 
         i = 0; 
         if (grid(x-1, y-1)) i += 1; 
@@ -175,7 +240,11 @@ $(function(){
 
       // search for a starting point; begin at origin 
       // and proceed along outward-expanding diagonals 
+      let t = 0;
       while (true) { 
+        t++;
+        if (t < 10) console.log(t + ') ' + x + ', ' + y);
+        
         if (grid(x,y)) { 
           return [x,y]; 
         } 
